@@ -1128,6 +1128,44 @@ footer {
   .wa-float svg { width: 26px; height: 26px; }
   .float-card { display: none; }
 }
+
+/* Eliminar transforms de hover en dispositivos táctiles */
+@media (hover: none) {
+  .reel-card:hover  { transform: none; }
+  .reel-thumb:hover { transform: none; }
+  .svc-card:hover   { transform: none; box-shadow: none; border-color: var(--border); }
+  .ba-card:hover    { transform: none; }
+  .test-card:hover  { transform: none; }
+}
+
+/* Spinner y fallback del modal */
+.reel-modal-iframe-wrap { position: relative; background: #0a0a0a; }
+
+.reel-modal-spinner {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px; height: 36px;
+  border: 3px solid rgba(255,255,255,.1);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+  pointer-events: none;
+  transition: opacity .25s;
+  z-index: 4;
+}
+.reel-modal-spinner.hidden { opacity: 0; }
+@keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+.reel-modal-fallback {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 13px 16px;
+  background: rgba(255,255,255,.05);
+  border-top: 1px solid rgba(255,255,255,.08);
+  color: rgba(255,255,255,.6); font-size: 13px; font-weight: 600;
+  text-decoration: none; transition: background .2s, color .2s;
+}
+.reel-modal-fallback:hover,
+.reel-modal-fallback:focus { background: rgba(255,255,255,.1); color: white; }
 </style>
 </head>
 <body>
@@ -2184,9 +2222,16 @@ footer {
   <div class="reel-modal-bg" onclick="closeReel()"></div>
   <div class="reel-modal-box">
     <button class="reel-modal-close" onclick="closeReel()" aria-label="Cerrar">✕</button>
-    <iframe id="reelIframe" src="" allowfullscreen
-      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
-    </iframe>
+    <div class="reel-modal-iframe-wrap">
+      <div class="reel-modal-spinner" id="reelSpinner"></div>
+      <iframe id="reelIframe" src="" allowfullscreen
+        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
+      </iframe>
+    </div>
+    <a id="reelFallback" href="#" target="_blank" rel="noopener" class="reel-modal-fallback">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+      Abrir en Instagram si no carga
+    </a>
   </div>
 </div>
 
@@ -2256,51 +2301,98 @@ document.querySelectorAll('.svc-card, .tech-item, .ba-card, .test-card, .proc-it
 });
 
 /* ── Reels carousel ── */
-function scrollReels(dir) {
-  const track = document.getElementById('reelsTrack');
-  const cardW = track.querySelector('.reel-card').offsetWidth + 28;
-  track.scrollBy({ left: dir * cardW, behavior: 'smooth' });
-}
-
-function goToReel(idx) {
-  const track = document.getElementById('reelsTrack');
-  const cardW = track.querySelector('.reel-card').offsetWidth + 28;
-  track.scrollTo({ left: idx * cardW, behavior: 'smooth' });
-}
-
-// Sync dots with scroll
-document.getElementById('reelsTrack')?.addEventListener('scroll', function() {
-  const cardW = this.querySelector('.reel-card').offsetWidth + 28;
-  const idx   = Math.round(this.scrollLeft / cardW);
-  document.querySelectorAll('.rd').forEach((d, i) => d.classList.toggle('active', i === idx));
-});
-
-// Auto-scroll reels every 4s
-let reelIdx = 0;
-const totalReels = document.querySelectorAll('.reel-card').length;
-const reelAutoTimer = setInterval(() => {
+(function () {
   const track = document.getElementById('reelsTrack');
   if (!track) return;
-  reelIdx = (reelIdx + 1) % totalReels;
-  goToReel(reelIdx);
-}, 4000);
+
+  const cards = Array.from(track.querySelectorAll('.reel-card'));
+  const total = cards.length;
+  let idx        = 0;
+  let autoTimer  = null;
+  let endTimer   = null;
+
+  function getGap() {
+    const g = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap);
+    return isNaN(g) ? 28 : g;
+  }
+  function cardW() { return (cards[0] ? cards[0].offsetWidth : 260) + getGap(); }
+
+  function setDots(i) {
+    document.querySelectorAll('.rd').forEach((d, k) => d.classList.toggle('active', k === i));
+  }
+
+  function scrollTo(i) {
+    idx = Math.max(0, Math.min(i, total - 1));
+    track.scrollTo({ left: idx * cardW(), behavior: 'smooth' });
+    setDots(idx);
+  }
+
+  function stopAuto()    { clearInterval(autoTimer); autoTimer = null; }
+  function startAuto()   { stopAuto(); autoTimer = setInterval(() => scrollTo((idx + 1) % total), 4500); }
+
+  // globals used by arrow buttons and dots
+  window.goToReel    = function (i) { stopAuto(); scrollTo(i); startAuto(); };
+  window.scrollReels = function (d) { window.goToReel(idx + d); };
+
+  // sync idx when user swipes manually (debounced)
+  track.addEventListener('scroll', function () {
+    clearTimeout(endTimer);
+    endTimer = setTimeout(function () {
+      const cw = cardW();
+      if (cw > 0) { idx = Math.round(track.scrollLeft / cw); setDots(idx); }
+    }, 100);
+  }, { passive: true });
+
+  // pause auto on touch, restart after swipe ends
+  track.addEventListener('touchstart', function () { stopAuto(); },  { passive: true });
+  track.addEventListener('touchend',   function () { setTimeout(startAuto, 1200); }, { passive: true });
+
+  startAuto();
+
+  // expose so openReel/closeReel can pause/resume
+  window._reelStop    = stopAuto;
+  window._reelStart   = startAuto;
+}());
 
 /* ── Reel lightbox ── */
 function openReel(shortcode) {
-  clearInterval(reelAutoTimer);
-  document.getElementById('reelIframe').src =
-    'https://www.instagram.com/reel/' + shortcode + '/embed/';
-  document.getElementById('reelModal').classList.add('open');
+  window._reelStop && window._reelStop();
+
+  var modal    = document.getElementById('reelModal');
+  var iframe   = document.getElementById('reelIframe');
+  var spinner  = document.getElementById('reelSpinner');
+  var fallback = document.getElementById('reelFallback');
+
+  iframe.src = '';
+  if (spinner)  { spinner.classList.remove('hidden'); }
+  if (fallback) { fallback.href = 'https://www.instagram.com/reel/' + shortcode + '/'; }
+
+  modal.classList.add('open');
   document.body.style.overflow = 'hidden';
+
+  // load iframe after modal animation starts
+  setTimeout(function () {
+    iframe.src = 'https://www.instagram.com/reel/' + shortcode + '/embed/';
+  }, 120);
 }
+
 function closeReel() {
   document.getElementById('reelModal').classList.remove('open');
   document.getElementById('reelIframe').src = '';
   document.body.style.overflow = '';
+  setTimeout(function () { window._reelStart && window._reelStart(); }, 600);
 }
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeReel();
-});
+
+// hide spinner when iframe finishes loading
+var _iframe = document.getElementById('reelIframe');
+if (_iframe) {
+  _iframe.addEventListener('load', function () {
+    var sp = document.getElementById('reelSpinner');
+    if (sp) sp.classList.add('hidden');
+  });
+}
+
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeReel(); });
 </script>
 </body>
 </html>
